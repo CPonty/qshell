@@ -1,4 +1,5 @@
 .c9revisions
-.tar.gz
+*.tar.gz
 qshell-dist
-.o
+*.o
+qshell
