@@ -5,6 +5,7 @@
 STUDENT_ID="s4234549"
 
 DIST_FILES=qshell.c qshell.c qshell.1 qshell makefile LICENSE README.md
+DIST_FILE=${STUDENT_ID}.tar.gz
 SRC_FILES=qshell.c
 EXEC_FILE=qshell
 TEST_FILE=scratch.sh
@@ -32,17 +33,22 @@ qshell: qshell.o
 build: qshell
 	@echo "Binary: "${EXEC_FILE}
 
+run: build
+	./${EXEC_FILE}
+
 dist: clean build
-	tar -cvzf ${STUDENT_ID}.tar.gz ${DIST_FILES}
-	@echo "Distribution: "${STUDENT_ID}".tar.gz"
+	tar -cvzf ${DIST_FILE} ${DIST_FILES}
+	@echo "Distribution: "${DIST_FILE}
 
 unzip: dist
 	@rm -rf ${DIST_DIR}
 	mkdir ${DIST_DIR}
-	@cp ${STUDENT_ID}.tar.gz ${DIST_DIR}
-	@cd ${DIST_DIR}
-	tar -xvzf ${STUDENT_ID}.tar.gz
-	@echo "Unzipped: "${STUDENT_ID}".tar.gz"
+	@cp ${DIST_FILE} ${DIST_DIR}
+	tar -xvzf ${DIST_DIR}/${DIST_FILE} -C ${DIST_DIR}
+	@echo "Unzipped: "${DIST_FILE}
+
+run-dist: unzip
+	make -C ${DIST_DIR} run 
 
 ##	man: qshell.1
 ##		@cp ${MAN_FILE} ${MAN_DIR}
@@ -58,8 +64,10 @@ help:
 	@echo -e "Targets:\n"\
 	"  clean    delete objects, binaries\n"\
 	"  build    compile qshell binary\n"\
+	"  run      build, execute\n"\
 	"  dist     create .tar.gz distributable\n"\
 	"  unzip    extract .tar.gz distributable\n"\
+	"  run-dist build, dist, unzip, execute\n"\
 	"  all      clean, build\n"\
 	"  test     run tests\n"\
 	"  help     show this help text"
