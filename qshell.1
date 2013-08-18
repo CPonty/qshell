@@ -12,6 +12,7 @@ qshell \- COMP3301 Operating Systems Shell project
 .PP
 If a \fIFILE\fR argument is given, commands are read from the \fIFILE\fR; otherwise, \fBqshell\fR launches in interactive mode and prompts for commands.
 .SH OPTIONS
+\-
 .SH EXIT STATUS
 .TP
 0
@@ -24,23 +25,97 @@ for minor problems (e.g. cannot access \fIFILE\fR given)
 for serious trouble (e.g. memory issues, internal errors)
 .SH ENVIRONMENT
 The behaviour of \fBqshell\fR is affected by the following environment variables.
-.IP "\fBPATH\fR" 4
+.IP "\fBPATH\fR" 
+\fBqshell\fR uses the PATH variable to look for commands.
 .IX Item "PATH"
-The path
-.IP "\fBHOME\fR" 4
+.IP "\fBHOME\fR" 
+When the command \fBcd\fR is used without arguments, the shell changes directories to the directory specified by HOME.
 .IX Item "HOME"
-The home
 .SH FILES
 .IX Header "FILES"
-.IP "\fBqshell\fR" 4
+.IP "\fBqshell\fR" 
 .IX Item "qshell"
 The executable binary.
-.IP "No external files are required" 4
+.IP "No external files are required" 
 .IX Item "No external files"
+.SH "SUPPORTED SHELL SYNTAX"
+.IX Header "SUPPORTED SHELL SYNTAX"
+.IP "command [arg1 arg2 ...] [< input_file] [> output_file] [&]" 
+or
+.IX Item "cmdline1"
+.IP "command [arg1 arg2 ...] [> output_file] [< input_file] [&]" 
+or
+.IX Item "cmdline2"
+.IP "command [arg1 ...] [< input_file] | command2 [arg1 ...] [> output_file]" 
+ 
+.IX Item "cmdline3"
+.SH INBUILT COMMANDS
+.PP
+The following commands have inbuilt definitions, which override any available programs of the same name available on the PATH. 
+.PP
+They do not follow \fBSHELL SYNTAX\fR as above in that they do not support pipes, backgrounding or input/output redirection.
+.TP
+\fBcd\fR [\fIDIR\fR]
+Change directory to \fIDIR\fR if supplied; else change directory to HOME.
+.TP
+\fBexit\fR
+Exits the shell, ignoring any arguments
 .SH NOTES
+.PP
+In comparison to \fBbash\fR, \fBqshell\fR has many limitations. Notable ones include:
+.TP
+\-
+Chaining of pipes (|) is not supported. Only one pipe per command line
+.TP
+\-
+Background execution (&) may not be used with piped commands
+.TP
+\-
+Only space characters count as whitespace. Tabs and other whitespace characters are treated as text commands/arguments.
+.TP
+\-
+The shell does not support quoting (" or '). All spaces are treated as argument separators.
+.TP
+\-
+Command lines longer than 128 characters or with more than 20 space-separated arguments are not guaranteed to be supported.
+.PP
+Pressing Ctrl-C will terminate foreground command currently running, but will not terminate the shell or background processes.
 .SH BUGS
 \-
 .SH EXAMPLES
+.IX Header "EXAMPLES"
+.IP "\fBInvocation\fR" 
+qshell commands.sh
+.IX Item "Invocation"
+.IP "\fBCommands\fR" 
+cd /usr/bin
+.br
+cd
+.br
+# Now in HOME directory
+.br
+ 
+.br
+ls -l > files.txt
+.br
+cat < files.txt
+.br
+grep qshell > qfiles.txt < files.txt
+.br
+# qfiles.txt now lists filenames from files.txt containing 'qshell'
+.br
+ 
+.br
+ping -c 2 8.8.8.8 > google-dns-ping.txt &
+.br
+# Now pinging 8.8.8.8 in the background
+.br
+ 
+.br
+date | cut -d: -f1,2 > shorttime.txt
+.br
+# shorttime.txt now contains the time in \fIWkday Month Day HH:MM\fR format
+.IX Item "Commands"
 .SH AUTHOR
 Written by Chris Ponticello. christopher.ponticello@uqconnect.edu.au
 .SH SEE ALSO
