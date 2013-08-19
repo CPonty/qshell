@@ -22,7 +22,11 @@
 
 #define BUFFER_INCREMENT 128
 #define USAGE "Usage: qshell [FILE]\n"
-#define DEBUG 0
+#define WARN_CMDLINE_ARGS "Warning: command line input too long (>20 args)."\
+" Ignoring extra arguments\n"
+#define WARN_CMDLINE_CHARS "Warning: command line input too long"\
+" (>128 characters). Ignoring extra characters\n"
+#define DEBUG 2
 
 /* TYPES */
 
@@ -37,6 +41,7 @@ FILE * input;
 int main (int argc, char * argv[]);
 
 void init ();
+void stop ();
 void parse_args (int argc, char * argv[]);
 
 void read_input ();
