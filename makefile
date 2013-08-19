@@ -16,7 +16,7 @@ DIST_DIR=./qshell-dist
 ##MAN_DIR=/usr/share/man/man1
 
 CC=gcc
-CFLAGS =-c -pedantic -Wall -Wextra -std=c99
+CFLAGS =-c -pedantic -Wall -Wextra -std=gnu99
 
 
 clean: 
