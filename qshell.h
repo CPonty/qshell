@@ -38,7 +38,10 @@ int main (int argc, char * argv[]);
 
 void init ();
 void parse_args (int argc, char * argv[]);
-void load_stdin (char * fname);
+
+void read_input ();
+void parse_input (int argc, char * argv[]);
+void load_input (char * fname);
 
 void sys_message (int msgCode);
 /* */
