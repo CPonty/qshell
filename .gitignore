@@ -1,5 +1,6 @@
 .c9revisions
 *.tar.gz
-qshell-dist
 *.o
+*.swp
+qshell-dist
 qshell
