@@ -33,6 +33,14 @@ qshell: qshell.o
 build: qshell
 	@echo "Binary: "${EXEC_FILE}
 
+debug: clean
+	@sed -i 's/^#define DEBUG .*/#define DEBUG 2/g' qshell.h
+	@echo "Switched to DEBUG mode"
+
+release: clean
+	@sed -i 's/^#define DEBUG .*/#define DEBUG 0/g' qshell.h
+	@echo "Switched to RELEASE mode"
+
 run: build
 	./${EXEC_FILE}
 
@@ -64,6 +72,8 @@ help:
 	@echo -e "Targets:\n"\
 	"  clean    delete objects, binaries\n"\
 	"  build    compile qshell binary\n"\
+	"  debug    set debug flags\n"\
+	"  release  clear debug flags\n"\
 	"  run      build, execute\n"\
 	"  dist     create .tar.gz distributable\n"\
 	"  unzip    extract .tar.gz distributable\n"\

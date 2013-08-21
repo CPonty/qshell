@@ -211,13 +211,13 @@ void parse_input (int argc, char * argv[]) {
 		stop();
 	} else if (streq(argv[0], "cd")) {
 		// check argument count
-		if (argc>2) {
-			fprintflush(stderr, "qshell: too many arguments "\
-				"for command \"cd\"");
-			return;
-		}
-		// 2 args: a path was provided
-		if (argc==2) {
+		///if (argc>2) {
+		////	fprintflush(stderr, "qshell: too many arguments "\
+		////		"for command \"cd\"");
+		////	return;
+		////}
+		// >1 args: a path was provided (ignore extra args)
+		if (argc>1) {
 			argPtr = argv[1];			
 		// 1 args: no path provided, go to HOME
 		} else {
