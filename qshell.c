@@ -147,6 +147,7 @@ void parse_input (int argc, char * argv[]) {
 	int pipePos=-1, inDirectPos=-1, outDirectPos=-1;
 	int comArgCounter=0;
 	bool valid=1;
+	char * argPtr;
 
 	#if DEBUG>1
 	fprintf(stderr, "argc=%d\n", argc);
@@ -158,12 +159,24 @@ void parse_input (int argc, char * argv[]) {
 	if (streq(argv[0], "exit")) {
 		stop();
 	} else if (streq(argv[0], "cd")) {
+		// check argument count
 		if (argc>2) {
 			fprintflush(stderr, "qshell: too many arguments "\
 				"for command \"cd\"");
 			return;
 		}
-		if (chdir(argv[1])<0) {
+		// 2 args: a path was provided
+		if (argc==2) {
+			argPtr = argv[1];			
+		// 1 args: no path provided, go to HOME
+		} else {
+			if ((argPtr = getenv("HOME"))==NULL) {
+				fprintflush(stderr, "getenv() error : %s\n",
+					strerror(errno));
+			}
+		}
+		// chdir
+		if (chdir(argPtr)<0) {
 			fprintflush(stderr, "chdir() error : %s\n",
 				strerror(errno));
 		}
