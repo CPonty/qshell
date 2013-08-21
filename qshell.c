@@ -15,9 +15,13 @@ int main (int argc, char * argv[]) {
 
 void init () {
 	/*
-	 * Set initial values for global variables
+	 * Setup: signal handling, initial values for global variables
 	 */
 	input = stdin;
+	sig_setup();
+	#if DEBUG>1
+	fprintflush(stderr, " === QSHELL-%d === \n\n", getpid());
+	#endif
 }
 
 void stop () {
@@ -28,7 +32,7 @@ void stop () {
 	 *  - exit with status 0 (OK)
 	 */
 	#if DEBUG>0
-	fprintflush(stderr, "Exiting, status 0\n");
+	fprintflush(stderr, "\nExiting, status 0\n");
 	#else
 	fprintflush(stderr, "\n");
 	#endif
@@ -75,16 +79,20 @@ void read_input () {
 		}
 
 		/* 2. Read from input stream. Max 128 characters.
-		 *    Split on newline/EoF/comment(#)
+		 *    Split on newline/EoF/comment(#)/ctrl-c
 		 */
 		charc=0;
 		c='\0';
 		while ((c=fgetc(input))!='\n' && c!='#' && !feof(input) && \
-		       (charc<128)) {
+		       (charc<128) && !ctrlc) {
 			strbuf[charc++]=c;
 		}
 		strbuf[charc]='\0';
-		//flush characters until the next newline
+		// handle ctrl-c
+		if (ctrlc) {
+			fprintflush(stdout, "control-c!");
+		}
+		// flush characters until the next newline
 		if (charc==128 || c=='#') {
 			while (fgetc(input)!='\n' && !feof(input));
 		}
@@ -93,7 +101,7 @@ void read_input () {
 			fprintflush(stdout, "%s\n", strbuf);
 		}
 		#endif
-		//warning for too many characters
+		// warning for too many characters
 		if (charc==128) {
 			fprintflush(stderr, WARN_CMDLINE_CHARS);
 		}
@@ -243,32 +251,40 @@ void proc_child_forked (int fdc, int fdv[], int argc, char *argv[], int pid) {
      
 }
 
+void proc_killall () {
+	/*
+	 *
+	 */
+
+}
+
 
 /* ------------------------------------------------------------------------- */
 /* signal handling */
 
-void sig_do_int () {
+void sig_do_int (int status) {
 	/*
-	 * >
+	 * Interrupt on SIGINT
 	 */
-	
+	fprintflush(stderr, "SIGINT\n");
+	ctrlc=1;
 }
 
-void sig_do_child () {
+void sig_do_child (int status) {
         /*
          * >
          */
     
 }
 
-void sig_do_shutdown () {
+void sig_do_shutdown (int status) {
         /*
          * >
          */
     
 }
 
-void sig_do_pipe () {
+void sig_do_pipe (int status) {
         /*
          * >
          */
@@ -277,9 +293,14 @@ void sig_do_pipe () {
 
 void sig_setup () {
         /*
-         * >
+         * Enable interrupts for signal handling
          */
-    
+	struct sigaction sa[4];
+	
+	// SIGINT (ctrl-c) kills active process
+	sa[0].sa_handler = sig_do_int;
+	sa[0].sa_flags = SA_RESTART;
+	sigaction(SIGINT, &sa[0], &storedSigActions[0]);
 }
 
 void sig_cancel () {

@@ -44,7 +44,10 @@ typedef unsigned char bool;
 
 /* GLOBALS */
 
-FILE * input; 
+FILE * input; // pointer to input stream (stdin or a file)
+sigset_t sigList; // list of signals to block
+struct sigaction storedSigActions[4]; // keep signal actions to restore
+bool ctrlc = 0;
 
 /* FUNCTION PROTOTYPES */
 
@@ -60,10 +63,10 @@ void parse_input (int argc, char * argv[]);
 void load_input (char * fname);
 
 /* signal handling */
-void sig_do_int ();
-void sig_do_child ();
-void sig_do_shutdown ();
-void sig_do_pipe ();
+void sig_do_int (int status);
+void sig_do_child (int status);
+void sig_do_shutdown (int status);
+void sig_do_pipe (int status);
 void sig_setup ();
 void sig_cancel ();
 void sig_block ();
@@ -72,6 +75,8 @@ void sig_unblock ();
 /* process handling */
 void proc_parent_forked (int fdc, int fdv[], int argc, char *argv[], int pid);
 void proc_child_forked (int fdc, int fdv[], int argc, char *argv[], int pid);
+void proc_killall ();
+
 
 void sys_message (int msgCode);
 /* */
