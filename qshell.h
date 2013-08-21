@@ -23,12 +23,18 @@
 #define BUFFER_INCREMENT 128
 
 #define USAGE "Usage: qshell [FILE]\n"
-#define WARN_CMDLINE_ARGS "Warning: command line input too long (>20 args)."\
+#define WARN_CMDLINE_ARGS "qshell: command line input too long (>20 args)."\
 " Ignoring extra arguments\n"
-#define WARN_CMDLINE_CHARS "Warning: command line input too long"\
+#define WARN_CMDLINE_CHARS "qshell: command line input too long"\
 " (>128 characters). Ignoring extra characters\n"
+#define WARN_CMDLINE_SYNTAX "qshell: unrecognised command line syntax. "\
+"Correct formatting:\n"\
+"  command [arg1 arg2 ...] [< input_file] [> output_file] [&]\n"\
+"  command [arg1 arg2 ...] [> output_file] [< input_file] [&]\n"\
+"  command [arg1 ...] [< input_file] | command2 [arg1 ...] [> output_file]\n"
 
 #define streq(p,q) (strcmp(p,q)==0)
+#define fprintflush(fil,...) {fprintf(fil,__VA_ARGS__); fflush(fil);}
 
 #define DEBUG 2
 

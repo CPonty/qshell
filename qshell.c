@@ -28,11 +28,10 @@ void stop () {
 	 *  - exit with status 0 (OK)
 	 */
 	#if DEBUG>0
-	fprintf(stderr, "Exiting, status 0\n");
+	fprintflush(stderr, "Exiting, status 0\n");
 	#else
-	fprintf(stderr, "\n");
+	fprintflush(stderr, "\n");
 	#endif
-	fflush(stderr);
 	exit(0);
 }
 
@@ -68,12 +67,11 @@ void read_input () {
 		/* 1. Print prompt (interactive mode) */
 		if (input==stdin) {
 			if (getcwd(strbuf,sizeof(strbuf))==NULL) {
-				fprintf(stderr, "getcwd() error : %s\n", 
+				fprintflush(stderr, "getcwd() error : %s\n", 
 					strerror(errno));
 				exit(2);
 			}
-			fprintf(stdout, "[%s]? ",strbuf);
-			fflush(stdout);
+			fprintflush(stdout, "[%s]? ",strbuf);
 		}
 
 		/* 2. Read from input stream. Max 128 characters.
@@ -92,13 +90,12 @@ void read_input () {
 		}
 		#if DEBUG>0
 		if (input!=stdin) {
-			fprintf(stdout, "%s\n", strbuf);
-			fflush(stdout);
+			fprintflush(stdout, "%s\n", strbuf);
 		}
 		#endif
 		//warning for too many characters
 		if (charc==128) {
-			fprintf(stderr, WARN_CMDLINE_CHARS);
+			fprintflush(stderr, WARN_CMDLINE_CHARS);
 		}
 
 		/* 3. Separate arguments. Max 20 arguments. */
@@ -119,7 +116,7 @@ void read_input () {
 		//warning for too many arguments
 		if (argc>20) {
 			argc=20;
-			fprintf(stderr, WARN_CMDLINE_ARGS);
+			fprintflush(stderr, WARN_CMDLINE_ARGS);
 		}
 
 		/* 4. Process input */
@@ -154,12 +151,26 @@ void parse_input (int argc, char * argv[]) {
 	#if DEBUG>1
 	fprintf(stderr, "argc=%d\n", argc);
 	for (int i=0; i<argc; i++) {
-		fprintf(stderr, "arg[%d]=%s\n", i, argv[i]);
+		fprintflush(stderr, "arg[%d]=%s\n", i, argv[i]);
 	}
 	#endif
-
-	// loop through the arguments
-	for (int i=0; i<argc; i++) {
+	// 1. check for inbuilt commands "cd" and "exit"
+	if (streq(argv[0], "exit")) {
+		stop();
+	} else if (streq(argv[0], "cd")) {
+		if (argc>2) {
+			fprintflush(stderr, "qshell: too many arguments "\
+				"for command \"cd\"");
+			return;
+		}
+		if (chdir(argv[1])<0) {
+			fprintflush(stderr, "chdir() error : %s\n",
+				strerror(errno));
+		}
+		return;
+	}
+	// 2. not inbuilt: loop through the arguments
+	else for (int i=0; i<argc; i++) {
 		// pipe (|)
 		if streq(argv[i], "|") {
 			comArgCounter=0;
@@ -181,6 +192,10 @@ void parse_input (int argc, char * argv[]) {
 			comArgCounter++;
 		}
 	}
+
+	// 3. unrecognised command syntax
+	fprintflush(stderr, WARN_CMDLINE_SYNTAX);
+	return;
 }
 
 void load_input (char * fname) {
