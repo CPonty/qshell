@@ -195,8 +195,9 @@ void parse_input (int argc, char * argv[]) {
 	/*
 	 * Handle a list of arguments from an input line
 	 */
-	int pipePos=-1, inDirectPos=-1, outDirectPos=-1;
-	int comArgCounter=0;
+	int pipePos=-1, inDirectPos=-1, outDirectPos=-1, backPos=-1;
+	int command1Pos=-1, command2Pos=-1, command1End=0, command2End=0;
+	int consecArgc=0;
 	bool valid=1;
 	char * argPtr;
 
@@ -210,12 +211,6 @@ void parse_input (int argc, char * argv[]) {
 	if (streq(argv[0], "exit")) {
 		stop();
 	} else if (streq(argv[0], "cd")) {
-		// check argument count
-		///if (argc>2) {
-		////	fprintflush(stderr, "qshell: too many arguments "\
-		////		"for command \"cd\"");
-		////	return;
-		////}
 		// >1 args: a path was provided (ignore extra args)
 		if (argc>1) {
 			argPtr = argv[1];			
@@ -233,34 +228,92 @@ void parse_input (int argc, char * argv[]) {
 		}
 		return;
 	}
-	// 2. not inbuilt: loop through the arguments
+
+	// 2. not inbuilt: loop through the arguments for syntax validation`
 	else for (int i=0; i<argc; i++) {
 		// pipe (|)
 		if streq(argv[i], "|") {
-			comArgCounter=0;
+			// enforce correct location
+			if (pipePos>=0 || i==argc-1 || consecArgc==0 ||\
+				outDirectPos>=0) {
+				fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+				return;
+			}
+			consecArgc=0;
+			pipePos=i;
 		}
 		// input redirect (<)
 		else if streq(argv[i], "<") {
-			comArgCounter=0;
+			// enforce correct location
+                        if (inDirectPos>=0 || i==argc-1 || consecArgc==0 ||\
+				pipePos>=0)  {
+                                fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+                                return;
+                        }
+			consecArgc=0;
+			inDirectPos=i;
+			
 		}
 		// output redirect (>)
 		else if streq(argv[i], ">") {
-			comArgCounter=0;
+			// enforce correct location
+                        if (outDirectPos>=0 || i==argc-1  || consecArgc==0) {
+                                fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+                                return;
+                        }
+			consecArgc=0;
+			outDirectPos=i;
+
 		}
 		// background (&)
 		else if streq(argv[i], "&") {
-			comArgCounter=0;
+			// enforce correct location
+                        if (backPos>=0 || i<argc-1 || consecArgc==0) {
+                                fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+                                return;
+                        }
+			consecArgc=0;
+			backPos=i;
+
 		}
 		// other: command/arg
 		else {
-			comArgCounter++;
+			consecArgc++;
+			// input/output redirection takes only 1 arg
+			if (consecArgc==2 && i>=2) {
+				if (outDirectPos==i-2 || inDirectPos==i-2) {
+					fprintflush(stdout, 
+						WARN_CMDLINE_SYNTAX);
+					return;
+				}
+			} 
+			// record positions of commands and their arguments
+			if (consecArgc>=2) {
+				if (command1Pos==-1) {
+					command1Pos=i;
+				} else if (command2Pos==-1) {
+					command2Pos=i;
+					//// max 1 command without pipe(|)
+					////if (pipePos==-1) {
+					////	fprintflush(stdout,
+					////		WARN_CMDLINE_SYNTAX);
+					////	return;
+					////}
+				} else {
+					//// max 2 commands/line
+					////fprintflush(stdout, 
+					////	WARN_CMDLINE_SYNTAX);
+					////return;
+				}
+			}
 		}
 	}
 
-	// 3. unrecognised command syntax
-	fprintflush(stderr, WARN_CMDLINE_SYNTAX);
+	// 3 execute!
+	fprintflush(stderr, "exec\n");
 	return;
 }
+////	int command1Pos=-1, command2Pos=-1, command1End=0, command2End=0;
 
 void load_input (char * fname) {
 	/*
@@ -311,6 +364,8 @@ void sig_do_int (int status) {
 	 */
 	#if DEBUG>0
 	fprintflush(stderr, "SIGINT\n");
+	#else
+	fprintflush(stdout, "\n");
 	#endif
 	ctrlc=1;
 

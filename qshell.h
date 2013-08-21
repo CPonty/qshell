@@ -27,7 +27,7 @@
 " Ignoring extra arguments\n"
 #define WARN_CMDLINE_CHARS "qshell: command line input too long"\
 " (>128 characters). Ignoring extra characters\n"
-#define WARN_CMDLINE_SYNTAX "qshell: unrecognised command line syntax. "\
+#define WARN_CMDLINE_SYNTAX "qshell: unsupported command line syntax. "\
 "Correct formatting:\n"\
 "  command [arg1 arg2 ...] [< input_file] [> output_file] [&]\n"\
 "  command [arg1 arg2 ...] [> output_file] [< input_file] [&]\n"\
@@ -36,7 +36,7 @@
 #define streq(p,q) (strcmp(p,q)==0)
 #define fprintflush(fil,...) {fprintf(fil,__VA_ARGS__); fflush(fil);}
 
-#define DEBUG 2
+#define DEBUG 0
 
 /* TYPES */
 
