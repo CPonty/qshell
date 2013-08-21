@@ -67,7 +67,13 @@ void read_input () {
 	char *argv[20], **argp;
 	int charc, argc;
 
+	fd_set fds;
+	struct timeval timeout;
+	int readyStreams;
+
 	while (1) {
+		ctrlc=0;
+
 		/* 1. Print prompt (interactive mode) */
 		if (input==stdin) {
 			if (getcwd(strbuf,sizeof(strbuf))==NULL) {
@@ -78,59 +84,96 @@ void read_input () {
 			fprintflush(stdout, "[%s]? ",strbuf);
 		}
 
-		/* 2. Read from input stream. Max 128 characters.
-		 *    Split on newline/EoF/comment(#)/ctrl-c
+		/* 2. Read from input stream.
 		 */
 		charc=0;
 		c='\0';
-		while ((c=fgetc(input))!='\n' && c!='#' && !feof(input) && \
-		       (charc<128) && !ctrlc) {
-			strbuf[charc++]=c;
+		// before actually reading anything, select() on input
+		//   this will allow us to pick up ctrl-c (SIGINT)
+		//   without getting stuck in the blocking fgetc() loop
+		while (!ctrlc) {
+			FD_ZERO(&fds);
+			FD_SET(fileno(input), &fds);
+			timeout.tv_sec = 0;
+			// block for 1ms at a time
+			timeout.tv_usec = 1000;
+			readyStreams = select(fileno(input)+1, &fds, NULL, 
+				NULL, &timeout); 
+			// ignore signals interrupting our system call
+			if (readyStreams<0) {
+				if (errno == EINTR) continue;	
+				fprintflush(stderr, "select() error : %s\n", 
+					strerror(errno));
+				exit(2);
+			}
+			if (readyStreams==0) {
+				// not ready
+				//// fprintflush(stderr,".");
+			} else {
+				// ready
+				break;
+			}
+			
 		}
-		strbuf[charc]='\0';
-		// handle ctrl-c
-		if (ctrlc) {
-			fprintflush(stdout, "control-c!");
-		}
+
+		if (!ctrlc) {
+			// read up to 128 chars. Split on EoF/NL/comment(#)
+			//   yes, I know I could have used readline(). 
+			//   I wanted to try some new things!
+			while ((c=fgetc(input))!='\n' && c!='#' && \
+				!feof(input) && (charc<128)) {
+				strbuf[charc++]=c;
+			}
+			strbuf[charc]='\0';
+			// handle ctrl-c
+			if (ctrlc) {
+				fprintflush(stdout, "control-c!");
+			}
+			// flush characters until the next newline
+			if (charc==128 || c=='#') {
+				while (fgetc(input)!='\n' && !feof(input));
+			}
+			#if DEBUG>0
+			if (input!=stdin) {
+				fprintflush(stdout, "%s\n", strbuf);
+			}
+			#endif
+			// warning for too many characters
+			if (charc==128) {
+				fprintflush(stderr, WARN_CMDLINE_CHARS);
+			}
+	
+			/* 3. Separate arguments. Max 20 arguments. */
+			for (int i=0; i<20; i++) {
+				argv[i]=NULL;
+			}
+			argc=0;
+			argp=argv;
+			bufp=strbuf;
+			for (; (*argp=strsep(&bufp, " "))!=NULL; ) {
+				if (**argp!='\0') {
+					argp++;
+					argc++;
+					if (argp>&argv[20]) 
+						break;
+				}	
+			}
+			//warning for too many arguments
+			if (argc>20) {
+				argc=20;
+				fprintflush(stderr, WARN_CMDLINE_ARGS);
+			}
+	
+			/* 4. Process input */
+			if (argc>0) {
+				parse_input(argc, argv);
+			}
+		}	
 		// flush characters until the next newline
 		if (charc==128 || c=='#') {
 			while (fgetc(input)!='\n' && !feof(input));
 		}
-		#if DEBUG>0
-		if (input!=stdin) {
-			fprintflush(stdout, "%s\n", strbuf);
-		}
-		#endif
-		// warning for too many characters
-		if (charc==128) {
-			fprintflush(stderr, WARN_CMDLINE_CHARS);
-		}
 
-		/* 3. Separate arguments. Max 20 arguments. */
-		for (int i=0; i<20; i++) {
-			argv[i]=NULL;
-		}
-		argc=0;
-		argp=argv;
-		bufp=strbuf;
-		for (; (*argp=strsep(&bufp, " "))!=NULL; ) {
-			if (**argp!='\0') {
-				argp++;
-				argc++;
-				if (argp>&argv[20]) 
-					break;
-			}	
-		}
-		//warning for too many arguments
-		if (argc>20) {
-			argc=20;
-			fprintflush(stderr, WARN_CMDLINE_ARGS);
-		}
-
-		/* 4. Process input */
-		if (argc>0) {
-			parse_input(argc, argv);
-		}
 
 		/* 5. Print background process output/termination
 		 *
@@ -140,7 +183,7 @@ void read_input () {
 		 *     - For interactive mode, this is any zero-char read
 		 *     - For file mode, we want to stop anytime we hit feof
 		 */
-		if (((charc==0) && (c!='\n') && (c!='#')) || \
+		if (((charc==0) && (c!='\n') && (c!='#') && !ctrlc) || \
 		    (input!=stdin && feof(input))) {
 			stop();
 		}
@@ -266,8 +309,14 @@ void sig_do_int (int status) {
 	/*
 	 * Interrupt on SIGINT
 	 */
+	#if DEBUG>0
 	fprintflush(stderr, "SIGINT\n");
+	#endif
 	ctrlc=1;
+
+	// Kill currently running child (if any)
+	//
+	//
 }
 
 void sig_do_child (int status) {
