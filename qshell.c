@@ -196,7 +196,7 @@ void parse_input (int argc, char * argv[]) {
 	 * Handle a list of arguments from an input line
 	 */
 	int pipePos=-1, inDirectPos=-1, outDirectPos=-1, backPos=-1;
-	int command1Pos=-1, command2Pos=-1, command1End=0, command2End=0;
+	int command1Pos=0, command2Pos=-1, command1End=-1, command2End=-1;
 	int consecArgc=0;
 	bool valid=1;
 	char * argPtr;
@@ -239,7 +239,12 @@ void parse_input (int argc, char * argv[]) {
 				fprintflush(stdout, WARN_CMDLINE_SYNTAX);
 				return;
 			}
+			// log info about argument structure
+			if (command2Pos==-1 && command1End==-1) {
+				command1End=i-1;
+			}	
 			consecArgc=0;
+			command2Pos=i+1;
 			pipePos=i;
 		}
 		// input redirect (<)
@@ -250,9 +255,13 @@ void parse_input (int argc, char * argv[]) {
                                 fprintflush(stdout, WARN_CMDLINE_SYNTAX);
                                 return;
                         }
+			// log info about argument structure
+			if (command2Pos==-1 && command1End==-1) {
+				command1End=i-1;
+			}	
+			consecArgc=0;
 			consecArgc=0;
 			inDirectPos=i;
-			
 		}
 		// output redirect (>)
 		else if streq(argv[i], ">") {
@@ -261,6 +270,13 @@ void parse_input (int argc, char * argv[]) {
                                 fprintflush(stdout, WARN_CMDLINE_SYNTAX);
                                 return;
                         }
+			// log info about argument structure
+			if (command2Pos==-1 && command1End==-1) {
+				command1End=i-1;
+			} else if (command2End==-1) {
+				command2End=i-1;
+			}	
+			consecArgc=0;
 			consecArgc=0;
 			outDirectPos=i;
 
@@ -272,6 +288,13 @@ void parse_input (int argc, char * argv[]) {
                                 fprintflush(stdout, WARN_CMDLINE_SYNTAX);
                                 return;
                         }
+			// log info about argument structure
+			if (command2Pos==-1 && command1End==-1) {
+				command1End=i-1;
+			} else if (command2End==-1) {
+				command2End=i-1;
+			}
+			consecArgc=0;
 			consecArgc=0;
 			backPos=i;
 
@@ -287,33 +310,46 @@ void parse_input (int argc, char * argv[]) {
 					return;
 				}
 			} 
-			// record positions of commands and their arguments
-			if (consecArgc>=2) {
-				if (command1Pos==-1) {
-					command1Pos=i;
-				} else if (command2Pos==-1) {
-					command2Pos=i;
-					//// max 1 command without pipe(|)
-					////if (pipePos==-1) {
-					////	fprintflush(stdout,
-					////		WARN_CMDLINE_SYNTAX);
-					////	return;
-					////}
-				} else {
-					//// max 2 commands/line
-					////fprintflush(stdout, 
-					////	WARN_CMDLINE_SYNTAX);
-					////return;
+			// Still need to detect ends of commands
+			//  - use characters <>|& above
+			//
+			if (0) {
+			if (consecArgc==1 && i>=2) {
+				if (command1Pos>=0 && command2Pos==-1 &&\
+					command1End==-1) {
+					command1End=i-2;
+				} else if (command2Pos>=0 && command2End==-1) {
+					command2End=i-2;
 				}
 			}
+			if (consecArgc>=2) {
+				if (command1Pos==-1) {
+					command1Pos=i-1;
+				} else if (command2Pos==-1 && command1End>0) {
+					command2Pos=i-1;
+				} else {
+				}
+			} }
 		}
 	}
+	// Close off end of commands
+	if (command1End==-1) {
+		command1End=argc-1;
+	}
+	if (command2Pos>=0 && command2End==-1) {
+		command2End=argc-1;
+	}	
 
 	// 3 execute!
+	#if DEBUG>1
+	fprintflush(stderr, "exec com1=%d..%d com2=%d..%d in=%d "\
+		"out=%d pipe=%d\n", command1Pos, command1End, 
+		command2Pos, command2End, inDirectPos, outDirectPos,
+		pipePos);
+	#endif
 	fprintflush(stderr, "exec\n");
 	return;
 }
-////	int command1Pos=-1, command2Pos=-1, command1End=0, command2End=0;
 
 void load_input (char * fname) {
 	/*
