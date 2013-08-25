@@ -58,9 +58,11 @@ void init ();
 void stop ();
 
 /* input parsing */
-void read_input ();
-void parse_input (int argc, char * argv[]);
-void load_input (char * fname);
+void input_load (char * fname);
+void input_read ();
+void input_parse (int argc, char * argv[]);
+void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
+	char * inFname, char * outFname, bool background);
 
 /* signal handling */
 void sig_do_int (int status);

@@ -45,11 +45,11 @@ void parse_args (int argc, char * argv[]) {
 	 */
 	if (argc==1) {
 		/* No parameters - start interactive input */
-		read_input();	
+		input_read();	
 	} else if (argc==2) {
 		/* One parameter - open as file to read commands from */
-		load_input(argv[1]);
-		read_input();
+		input_load(argv[1]);
+		input_read();
 	} else {
 		/* 2+ paramters - not supported */
 		printf(USAGE);
@@ -57,9 +57,21 @@ void parse_args (int argc, char * argv[]) {
 }
 
 /* ------------------------------------------------------------------------- */
-/*input parsing  */
+/*input handling */
 
-void read_input () {
+void input_load (char * fname) {
+	/*
+	 * Set the input stream to a file pointer to FNAME
+	 */
+	input = fopen(fname,"r");
+	if (input==NULL) {
+		fprintf(stderr, "Unable to open commands file '%s': %s\n",
+			fname, strerror(errno));
+		exit(1);
+	}
+}
+
+void input_read () {
 	/*
 	 * Main event loop to collect commands from input lines
 	 */
@@ -166,7 +178,7 @@ void read_input () {
 	
 			/* 4. Process input */
 			if (argc>0) {
-				parse_input(argc, argv);
+				input_parse(argc, argv);
 			}
 		}	
 		// flush characters until the next newline
@@ -191,14 +203,13 @@ void read_input () {
 	}
 }
 
-void parse_input (int argc, char * argv[]) {
+void input_parse (int argc, char * argv[]) {
 	/*
 	 * Handle a list of arguments from an input line
 	 */
 	int pipePos=-1, inDirectPos=-1, outDirectPos=-1, backPos=-1;
 	int command1Pos=0, command2Pos=-1, command1End=-1, command2End=-1;
 	int consecArgc=0;
-	bool valid=1;
 	char * argPtr;
 
 	#if DEBUG>1
@@ -310,26 +321,6 @@ void parse_input (int argc, char * argv[]) {
 					return;
 				}
 			} 
-			// Still need to detect ends of commands
-			//  - use characters <>|& above
-			//
-			if (0) {
-			if (consecArgc==1 && i>=2) {
-				if (command1Pos>=0 && command2Pos==-1 &&\
-					command1End==-1) {
-					command1End=i-2;
-				} else if (command2Pos>=0 && command2End==-1) {
-					command2End=i-2;
-				}
-			}
-			if (consecArgc>=2) {
-				if (command1Pos==-1) {
-					command1Pos=i-1;
-				} else if (command2Pos==-1 && command1End>0) {
-					command2Pos=i-1;
-				} else {
-				}
-			} }
 		}
 	}
 	// Close off end of commands
@@ -347,21 +338,59 @@ void parse_input (int argc, char * argv[]) {
 		command2Pos, command2End, inDirectPos, outDirectPos,
 		pipePos);
 	#endif
-	fprintflush(stderr, "exec\n");
+
+	input_exec(command1End-command1Pos+1,
+		&argv[command1Pos],
+		(command2Pos==-1?0:command2End-command2Pos+1),
+		(command2Pos==-1?NULL:&argv[command2Pos]),
+		(inDirectPos==-1?NULL:argv[inDirectPos]),
+		(outDirectPos==-1?NULL:argv[outDirectPos]),
+		(backPos==-1?0:1)
+	);
 	return;
 }
 
-void load_input (char * fname) {
+void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
+        char * inFname, char * outFname, bool background) {
 	/*
-	 * Set the input stream to a file pointer to FNAME
+	 * Execute parsed/validated input commands
 	 */
-	input = fopen(fname,"r");
-	if (input==NULL) {
-		fprintf(stderr, "Unable to open commands file '%s': %s\n",
-			fname, strerror(errno));
-		exit(1);
+	int i;
+	int status;
+	char **exec1v, **exec2v;
+	pid_t pid1, pid2;
+
+	// allocate null-terminated argument vectors
+	exec1v = (char **) malloc((arg1c+1)*sizeof(char *));
+	for (i=0; i<arg1c+1; i++) {
+		exec1v[i] = arg1v[i];
 	}
+	exec1v[i-1]=NULL;
+	if (arg2c>0) {
+		for (i=0; i<arg2c+1; i++) {
+			exec2v[i] = arg2v[i];
+		}
+		exec2v[i-1]=NULL;
+	}
+
+	// create pipe(s)
+
+	/* fork and execute command 1 */
+	if (!(pid1 = fork())) {
+		// CHILD
+		// 1. Setup input file (if applicable)
+		// 2. Setup output file (if applicable)
+		// 3. Setup pipe (if applicable)
+		// 4. Exec
+		execvp(exec1v[0],&exec1v[0]);
+	} else {
+		// PARENT
+		waitpid(pid1, &status, NULL);
+	} 
+
+	fprintflush(stderr, "exec\n");
 }
+
 
 
 /* ------------------------------------------------------------------------- */
