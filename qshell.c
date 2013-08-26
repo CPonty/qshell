@@ -8,6 +8,10 @@
 /* Top level */
 
 int main (int argc, char * argv[]) {
+	#if DEBUG>1
+	fprinterr(" === QSHELL-%d === \n\n", getpid());
+	#endif
+	
 	init();
 	parse_args(argc, argv);	
 	return 0;
@@ -19,9 +23,6 @@ void init () {
 	 */
 	input = stdin;
 	sig_setup();
-	#if DEBUG>1
-	fprinterr(" === QSHELL-%d === \n\n", getpid());
-	#endif
 }
 
 void stop () {
@@ -89,11 +90,10 @@ void input_read () {
 		/* 1. Print prompt (interactive mode) */
 		if (input==stdin) {
 			if (getcwd(strbuf,sizeof(strbuf))==NULL) {
-				fprinterr("getcwd() error : %s\n", 
-					strerror(errno));
+				fnerror("getcwd");
 				exit(2);
 			}
-			fprintflush(stdout, "[%s]? ",strbuf);
+			fprintout("[%s]? ",strbuf);
 		}
 
 		/* 2. Read from input stream.
@@ -107,18 +107,17 @@ void input_read () {
 			FD_ZERO(&fds);
 			FD_SET(fileno(input), &fds);
 			timeout.tv_sec = 0;
-			// block for 1ms at a time
-			timeout.tv_usec = 1000;
+			// block for some ms at a time
+			timeout.tv_usec = 10000;
 			readyStreams = select(fileno(input)+1, &fds, NULL, 
 				NULL, &timeout); 
 			// ignore signals interrupting our system call
 			if (readyStreams<0) {
 				if (errno == EINTR) continue;	
-				fprinterr("select() error : %s\n", 
-					strerror(errno));
+				fnerror("select");
 				exit(2);
 			}
-			if (readyStreams==0) {
+			else if (readyStreams==0) {
 				// not ready
 				//// fprinterr(".");
 			} else {
@@ -139,7 +138,7 @@ void input_read () {
 			strbuf[charc]='\0';
 			// handle ctrl-c
 			if (ctrlc) {
-				fprintflush(stdout, "control-c!");
+				fprintout("control-c!");
 			}
 			// flush characters until the next newline
 			if (charc==128 || c=='#') {
@@ -147,7 +146,7 @@ void input_read () {
 			}
 			#if DEBUG>0
 			if (input!=stdin) {
-				fprintflush(stdout, "%s\n", strbuf);
+				fprintout("%s\n", strbuf);
 			}
 			#endif
 			// warning for too many characters
@@ -228,14 +227,12 @@ void input_parse (int argc, char * argv[]) {
 		// 1 args: no path provided, go to HOME
 		} else {
 			if ((argPtr = getenv("HOME"))==NULL) {
-				fprinterr("getenv() error : %s\n",
-					strerror(errno));
+				fnerror("getenv");
 			}
 		}
 		// chdir
 		if (chdir(argPtr)<0) {
-			fprinterr("chdir() error : %s\n",
-				strerror(errno));
+			fnerror("chdir");
 		}
 		return;
 	}
@@ -247,7 +244,7 @@ void input_parse (int argc, char * argv[]) {
 			// enforce correct location
 			if (pipePos>=0 || i==argc-1 || consecArgc==0 ||\
 				outDirectPos>=0) {
-				fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+				fprintout(WARN_CMDLINE_SYNTAX);
 				return;
 			}
 			// log info about argument structure
@@ -263,7 +260,7 @@ void input_parse (int argc, char * argv[]) {
 			// enforce correct location
                         if (inDirectPos>=0 || i==argc-1 || consecArgc==0 ||\
 				pipePos>=0)  {
-                                fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+                                fprintout(WARN_CMDLINE_SYNTAX);
                                 return;
                         }
 			// log info about argument structure
@@ -278,7 +275,7 @@ void input_parse (int argc, char * argv[]) {
 		else if streq(argv[i], ">") {
 			// enforce correct location
                         if (outDirectPos>=0 || i==argc-1  || consecArgc==0) {
-                                fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+                                fprintout(WARN_CMDLINE_SYNTAX);
                                 return;
                         }
 			// log info about argument structure
@@ -296,7 +293,7 @@ void input_parse (int argc, char * argv[]) {
 		else if streq(argv[i], "&") {
 			// enforce correct location
                         if (backPos>=0 || i<argc-1 || consecArgc==0) {
-                                fprintflush(stdout, WARN_CMDLINE_SYNTAX);
+                                fprintout(WARN_CMDLINE_SYNTAX);
                                 return;
                         }
 			// log info about argument structure
@@ -316,7 +313,7 @@ void input_parse (int argc, char * argv[]) {
 			// input/output redirection takes only 1 arg
 			if (consecArgc==2 && i>=2) {
 				if (outDirectPos==i-2 || inDirectPos==i-2) {
-					fprintflush(stdout, 
+					fprintout(
 						WARN_CMDLINE_SYNTAX);
 					return;
 				}
@@ -357,7 +354,7 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 	 */
 	int i;
 	int status;
-	char **exec1v, **exec2v;
+	char *exec1v[21], *exec2v[21];
 	pid_t pid1, pid2;
 
 	#if DEBUG>0
@@ -365,13 +362,11 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 	#endif
 
 	// allocate null-terminated argument vectors
-	exec1v = (char **) malloc((arg1c+1)*sizeof(char *));
 	for (i=0; i<arg1c+1; i++) {
 		exec1v[i] = arg1v[i];
 	}
 	exec1v[i-1]=NULL;
 	if (arg2c>0) {
-		exec2v = (char **) malloc((arg2c+1)*sizeof(char *));
 		for (i=0; i<arg2c+1; i++) {
 			exec2v[i] = arg2v[i];
 		}
@@ -387,27 +382,37 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 		// 0. Cancel signal handlers from qshell
 		sig_cancel();
 		// 1. Setup input/output/err files (if applicable)
-		proc_set_streams(inFname, outFname, NULL);
+		proc_set_stream(inFname, "stdin", "r", stdin);
+		proc_set_stream(outFname, "stdout", "w", stdout);
 		// 3. Setup pipe (if applicable)
 		// 4. Exec
-		if (!background) 
-		if (execvp(exec1v[0], &exec1v[0])<0) {
-			fprinterr("exec() error : %s\n", strerror(errno));
+		if (!background) {
+			execvp(exec1v[0], &exec1v[0]);
+			fnerror("exec");
 			exit(EXIT_FAILURE);
 		}
 	}
 
 	// PARENT
-	// 1. Store PID (even if foreground - may need termination)
-	// 2. Wait
+	// 1. Foreground: store PID and wait
 	if (!background) {
-		waitpid(pid1, &status, 0);
+		fgPid=pid1;
+		#if DEBUG>0
+		fprinterr("FG Process : %d\n", fgPid);
+		#endif
+		waitpid(fgPid, &status, 0);
+		fgPid=-1; 
+		proc_do_reaped(pid1, status);
 	}
+	// 2. Background: ----------
+	//
+	sig_unblock(SIGCHLD);
 	 
 
 	#if DEBUG>0
 	fprinterr("\\exec\n");
 	#endif
+
 }
 
 
@@ -415,37 +420,16 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 /* ------------------------------------------------------------------------- */
 /* process handling */
 
-void proc_set_streams (char * inFname, char * outFname, char * errFname) {
+void proc_set_stream (char * fname, char * sname, char * mode, FILE * stream) {
 	/*
 	 * Replace stdin, stdout, stderr with files
 	 */
-	if (inFname) {
+	if (fname) {
 		#if DEBUG>0
-		fprinterr("stdin file : %s\n", inFname);
+		fprinterr("%s file : %s\n", sname, fname);
 		#endif
-		if (!freopen(inFname, "r", stdin)) {
-			fprinterr("freopen() error : %s\n", 
-				strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-	}
-	if (outFname) {
-		#if DEBUG>0
-		fprinterr("stdout file : %s\n", outFname);
-		#endif
-		if (!freopen(outFname, "w", stdout)) {
-			fprinterr("freopen() error : %s\n", 
-				strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-	}
-	if (errFname) {
-		#if DEBUG>0
-		fprinterr("stderr file : %s\n", errFname);
-		#endif
-		if (!freopen(errFname, "w", stderr)) {
-			fprinterr("freopen() error : %s\n", 
-				strerror(errno));
+		if (!freopen(fname, mode, stream)) {
+			fnerror("freopen");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -467,6 +451,24 @@ void proc_child_forked (int fdc, int fdv[], int argc, char *argv[], int pid) {
      
 }
 
+void proc_reap (int waitPid) {
+	/*
+	 * Reap (clean up) child processes.
+	 * waitPid specifies a certain process to wait for, -1 for all
+	 */
+	int pid, status;
+	int childExists=0;
+
+	
+}
+
+void proc_do_reaped(int pid, int status) {
+	/*
+	 * Handle a reaped process
+	 */
+	
+}
+
 void proc_killall () {
 	/*
 	 *
@@ -485,7 +487,7 @@ void sig_do_int (int status) {
 	#if DEBUG>0
 	fprinterr("SIGINT\n");
 	#else
-	fprintflush(stdout, "\n");
+	fprintout("\n");
 	#endif
 	ctrlc=1;
 
@@ -513,9 +515,11 @@ void sig_do_shutdown (int status) {
 
 void sig_do_pipe (int status) {
         /*
-         * >
+         * Debug handler in case we get sigpipe from stream writes/reads
          */
-    
+	#if DEBUG>0
+	fprinterr("SIGPIPE\n");
+	#endif
 }
 
 void sig_setup () {
@@ -528,6 +532,15 @@ void sig_setup () {
 	sa[0].sa_handler = sig_do_int;
 	sa[0].sa_flags = SA_RESTART;
 	sigaction(SIGINT, &sa[0], &storedSigActions[0]);
+	sa[0].sa_handler = sig_do_child;
+	sa[0].sa_flags = SA_RESTART;
+	sigaction(SIGCHLD, &sa[1], &storedSigActions[1]);
+	sa[0].sa_handler = sig_do_shutdown;
+	sa[0].sa_flags = SA_RESTART;
+	sigaction(SIGTERM, &sa[2], &storedSigActions[2]);
+	sa[3].sa_handler = sig_do_pipe;
+	sa[3].sa_flags = SA_RESTART;
+	sigaction(SIGPIPE, &sa[3], &storedSigActions[3]);
 }
 
 void sig_cancel () {
@@ -535,7 +548,10 @@ void sig_cancel () {
          * Restore signal handlers stored in storedSigActions
 	 * Used by child processes
          */
-	sigaction(SIGINT, &storedSigActions[0], 0);
+	sigaction(SIGINT,  &storedSigActions[0], 0);
+	sigaction(SIGCHLD, &storedSigActions[1], 0);
+	sigaction(SIGTERM, &storedSigActions[2], 0);
+	sigaction(SIGPIPE, &storedSigActions[3], 0);
 }
 
 void sig_block (int signal) {

@@ -36,6 +36,8 @@
 #define streq(p,q) (strcmp(p,q)==0)
 #define fprintflush(fil,...) {fprintf(fil,__VA_ARGS__); fflush(fil);}
 #define fprinterr(...) {fprintf(stderr,__VA_ARGS__); fflush(stderr);}
+#define fprintout(...) {fprintf(stdout,__VA_ARGS__); fflush(stdout);}
+#define fnerror(fnname) {fprintf(stderr, "%s() error : %s\n",fnname, strerror(errno)); fflush(stderr);}
 
 #define DEBUG 0
 
@@ -48,6 +50,11 @@ typedef unsigned char bool;
 FILE * input; // pointer to input stream (stdin or a file)
 sigset_t sigList; // list of signals to block
 struct sigaction storedSigActions[4]; // keep signal actions to restore
+/* 0: SIGINT
+ * 1: SIGCHLD
+ * 2: SIGTERM
+ * 3: SIGPIPE
+ */
 bool ctrlc = 0; // flag to indicate SIGINT/CTRL-C pressed
 int fgPid = -1; // PID of the currently running foreground process
 
@@ -77,9 +84,11 @@ void sig_block (int signal);
 void sig_unblock (int signal);
 
 /* process handling */
-void proc_set_streams (char * inFname, char * outFname, char * errFname);
+void proc_set_stream (char * fname, char * sname, char * mode, FILE * stream);
 void proc_parent_forked (int fdc, int fdv[], int argc, char *argv[], int pid);
 void proc_child_forked (int fdc, int fdv[], int argc, char *argv[], int pid);
+void proc_reap (int waitPid);
+void proc_do_reaped (int pid, int status);
 void proc_killall ();
 
 
