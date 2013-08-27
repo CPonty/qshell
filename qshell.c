@@ -25,7 +25,8 @@ void init (void) {
 	sig_setup();
 	bgPids = (int *)malloc(sizeof(int)*bgPidBufsize);
 	memset(bgPids, -1, sizeof(int)*bgPidBufsize);
-	for (int i=0; i<2; i++) fgPid[i]=-1;
+	for (int i=0; i<2; i++) 
+		fgPid[i]=-1;
 }
 
 void stop (void) {
@@ -38,13 +39,12 @@ void stop (void) {
 	int status;
 
 	proc_reap();
-	for (int i=0; i<2; i++) {
+	for (int i=0; i<2; i++) 
 		if (fgPid[i]!=-1) {
 			proc_stop(fgPid[i]);
 			waitpid(fgPid[i], &status, 0);
 			fgPid[i]=-1; 
 		}
-	}
 
 	free(bgPids);
 	if (input!=stdin) fclose(input);
@@ -134,14 +134,8 @@ void input_read (void) {
 				fnerror("select");
 				exit(2);
 			}
-			else if (readyStreams==0) {
-				// not ready
-				//// fprinterr(".");
-			} else {
-				// ready
-				break;
-			}
-			
+			// ready
+			if (!readyStreams) break;
 		}
 
 		if (!ctrlc) {
@@ -154,38 +148,30 @@ void input_read (void) {
 			}
 			strbuf[charc]='\0';
 			// handle ctrl-c
-			if (ctrlc) {
-				fprintout("control-c!");
-			}
+			if (ctrlc) fprintout("control-c!");
 			// flush characters until the next newline
-			if (charc==128 || c=='#') {
+			if (charc==128 || c=='#')
 				while (fgetc(input)!='\n' && !feof(input));
-			}
 			#if DEBUG>0
-			if (input!=stdin) {
+			if (input!=stdin)
 				fprintout("%s\n", strbuf);
-			}
 			#endif
 			// warning for too many characters
-			if (charc==128) {
-				fprinterr(WARN_CMDLINE_CHARS);
-			}
+			if (charc==128) fprinterr(WARN_CMDLINE_CHARS);
 	
 			/* 3. Separate arguments. Max 20 arguments. */
-			for (int i=0; i<20; i++) {
+			for (int i=0; i<20; i++)
 				argv[i]=NULL;
-			}
 			argc=0;
 			argp=argv;
 			bufp=strbuf;
-			for (; (*argp=strsep(&bufp, " "))!=NULL; ) {
+			for (; (*argp=strsep(&bufp, " "))!=NULL; )
 				if (**argp!='\0') {
 					argp++;
 					argc++;
 					if (argp>&argv[20]) 
 						break;
 				}	
-			}
 			//warning for too many arguments
 			if (argc>20) {
 				argc=20;
@@ -193,15 +179,11 @@ void input_read (void) {
 			}
 	
 			/* 4. Process input */
-			if (argc>0) {
-				input_parse(argc, argv);
-			}
+			if (argc>0) input_parse(argc, argv);
 		}	
 		// flush characters until the next newline
-		if (charc==128 || c=='#') {
+		if (charc==128 || c=='#')
 			while (fgetc(input)!='\n' && !feof(input));
-		}
-
 
 		/* 5. Print background process output/termination */
 		proc_reap();
@@ -211,10 +193,8 @@ void input_read (void) {
 		 *     - For file mode, we want to stop anytime we hit feof
 		 */
 		if (((charc==0) && (c!='\n') && (c!='#') && !ctrlc) || \
-		    (input!=stdin && feof(input))) {
+		    (input!=stdin && feof(input)))
 			stop();
-		}
-
 	}
 }
 
@@ -229,9 +209,8 @@ void input_parse (int argc, char * argv[]) {
 
 	#if DEBUG>1
 	fprintf(stderr, "argc=%d\n", argc);
-	for (int i=0; i<argc; i++) {
+	for (int i=0; i<argc; i++)
 		fprinterr("arg[%d]=%s\n", i, argv[i]);
-	}
 	#endif
 	// 1. check for inbuilt commands "cd" and "exit"
 	if (streq(argv[0], "exit")) {
@@ -242,14 +221,12 @@ void input_parse (int argc, char * argv[]) {
 			argPtr = argv[1];			
 		// 1 args: no path provided, go to HOME
 		} else {
-			if ((argPtr = getenv("HOME"))==NULL) {
+			if ((argPtr = getenv("HOME"))==NULL)
 				fnerror("getenv");
-			}
 		}
 		// chdir
-		if (chdir(argPtr)<0) {
-			fnerror("chdir");
-		}
+		if (chdir(argPtr)<0)
+			 fnerror("chdir");
 		return;
 	}
 
@@ -264,9 +241,8 @@ void input_parse (int argc, char * argv[]) {
 				return;
 			}
 			// log info about argument structure
-			if (command2Pos==-1 && command1End==-1) {
+			if (command2Pos==-1 && command1End==-1)
 				command1End=i-1;
-			}	
 			consecArgc=0;
 			command2Pos=i+1;
 			pipePos=i;
@@ -280,9 +256,8 @@ void input_parse (int argc, char * argv[]) {
                                 return;
                         }
 			// log info about argument structure
-			if (command2Pos==-1 && command1End==-1) {
+			if (command2Pos==-1 && command1End==-1)
 				command1End=i-1;
-			}	
 			consecArgc=0;
 			consecArgc=0;
 			inDirectPos=i;
@@ -290,10 +265,9 @@ void input_parse (int argc, char * argv[]) {
 		// output redirect (>)
 		else if streq(argv[i], ">") {
 			// enforce correct location
-                        if (outDirectPos>=0 || i==argc-1  || consecArgc==0) {
+                        if (outDirectPos>=0 || i==argc-1  || consecArgc==0)
                                 fprintout(WARN_CMDLINE_SYNTAX);
                                 return;
-                        }
 			// log info about argument structure
 			if (command2Pos==-1 && command1End==-1) {
 				command1End=i-1;
@@ -337,12 +311,10 @@ void input_parse (int argc, char * argv[]) {
 		}
 	}
 	// Close off end of commands
-	if (command1End==-1) {
+	if (command1End==-1)
 		command1End=argc-1;
-	}
-	if (command2Pos>=0 && command2End==-1) {
+	if (command2Pos>=0 && command2End==-1)
 		command2End=argc-1;
-	}	
 
 	// 3 execute!
 	#if DEBUG>1
@@ -378,20 +350,16 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 	fprinterr("exec\n");
 	#endif
 	// allocate null-terminated argument vectors
-	for (i=0; i<arg1c+1; i++) {
+	for (i=0; i<arg1c+1; i++)
 		exec1v[i] = arg1v[i];
-	}
 	exec1v[i-1]=NULL;
 	if (arg2c>0) {
-		for (i=0; i<arg2c+1; i++) {
+		for (i=0; i<arg2c+1; i++)
 			exec2v[i] = arg2v[i];
-		}
 		exec2v[i-1]=NULL;
 	}
 	// create pipe(s) (command1->command2)
-	if (arg2c) {
-		pipe(fdPipe);
-	}
+	if (arg2c) pipe(fdPipe);
 
 	// fork and execute command 1
 	if (!(pid1 = fork())) {
@@ -411,9 +379,8 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 		} else if (!arg2c) {
 			proc_set_stream(outFname, "stdout", "w", stdout);
 		}
-		if (background) {
+		if (background)
 			proc_set_stream("/dev/null", "stderr", "w", stderr);
-		}
 		// 2. Redirect pipe write end (if applicable)
 		if (arg2c) {
 			dup2(fdPipe[1], fileno(stdout));
@@ -427,20 +394,20 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 
 	// fork and execute any piped command
 	if (arg2c)
-	if (!(pid2 = fork())) {
-		// CHILD 2
-		// 0. Cancel signal handlers from qshell
-		sig_cancel();
-		// 1. Setup output file (if applicable)
-		proc_set_stream(outFname, "stdout", "w", stdout);
-		// 2. Redirect pipe read end
-		dup2(fdPipe[0], fileno(stdin));
-		close(fdPipe[1]);
-		// 3. Exec. Error code will not run if exec succeeds
-		execvp(exec2v[0], &exec2v[0]);
-		fnerror("exec");
-		exit(EXIT_FAILURE);
-	}
+		if (!(pid2 = fork())) {
+			// CHILD 2
+			// 0. Cancel signal handlers from qshell
+			sig_cancel();
+			// 1. Setup output file (if applicable)
+			proc_set_stream(outFname, "stdout", "w", stdout);
+			// 2. Redirect pipe read end
+			dup2(fdPipe[0], fileno(stdin));
+			close(fdPipe[1]);
+			// 3. Exec. Error code will not run if exec succeeds
+			execvp(exec2v[0], &exec2v[0]);
+			fnerror("exec");
+			exit(EXIT_FAILURE);
+		}
 
 	// PARENT
 	// 0. Close pipes
@@ -454,8 +421,8 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 		fgPid[1]=pid2;
 		#if DEBUG>0
 		fprinterr("FG      [%d]\t%s\n", pid1, arg1v[0]);
-		if (arg2c) fprinterr("FG-Pipe [%d]\t%s\n", 
-			pid2, arg2v[0]);
+		if (arg2c) 
+			fprinterr("FG-Pipe [%d]\t%s\n", pid2, arg2v[0]);
 		#endif
 		waitpid(fgPid[0], &status, 0);
 		fgPid[0]=-1; 
@@ -525,10 +492,9 @@ void proc_do_reaped(int pid, int status) {
 	 * Print info on a reaped process
 	 */
 	fprintout("BG-Done [%d]\tStatus : %d", pid, WEXITSTATUS(status));
-	if (WTERMSIG(status)) {
+	if (WTERMSIG(status))
 		fprintout("\tSignalled : %d-%s", WTERMSIG(status),
 			strsignal(WTERMSIG(status)));
-	}
 	fprintout("\n");
 }
 
@@ -596,9 +562,8 @@ void sig_do_int (int status) {
 	ctrlc=1;
 
 	// Kill currently foreground processes (if any)
-	for (int i=0; i<2; i++) {
+	for (int i=0; i<2; i++)
 		proc_stop(fgPid[i]);
-	}
 }
 
 void sig_do_child (int status) {
