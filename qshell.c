@@ -19,12 +19,13 @@ int main (int argc, char * argv[]) {
 
 void init (void) {
 	/*
-	 * Setup: signal handling, memory allocation
+	 * Setup: signal handling, memory allocation, global vars
 	 */
 	input = stdin;
 	sig_setup();
 	bgPids = (int *)malloc(sizeof(int)*bgPidBufsize);
 	memset(bgPids, -1, sizeof(int)*bgPidBufsize);
+	for (int i=0; i<2; i++) fgPid[i]=-1;
 }
 
 void stop (void) {
@@ -523,11 +524,6 @@ void proc_do_reaped(int pid, int status) {
 	/*
 	 * Print info on a reaped process
 	 */
-	if (WTERMSIG(status)) {
-		
-	} else {
-		
-	}
 	fprintout("BG-Done [%d]\tStatus : %d", pid, WEXITSTATUS(status));
 	if (WTERMSIG(status)) {
 		fprintout("\tSignalled : %d-%s", WTERMSIG(status),

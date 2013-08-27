@@ -40,7 +40,7 @@
 #define fprintout(...) {fprintf(stdout,__VA_ARGS__); fflush(stdout);}
 #define fnerror(fnname) {fprintf(stderr, "%s() error : %s\n",fnname, strerror(errno)); fflush(stderr);}
 
-#define DEBUG 2
+#define DEBUG 0
 
 /* TYPES */
 
@@ -57,7 +57,7 @@ struct sigaction storedSigActions[4]; // keep signal actions to restore
  * 3: SIGPIPE
  */
 bool ctrlc = 0; // flag to indicate SIGINT/CTRL-C pressed
-int fgPid[2] = {-1}; // PID of the currently running foreground process(es)
+int fgPid[2]; // PID of the currently running foreground process(es)
 int * bgPids; // PIDs for currently running background process(es)
 int bgPidBufsize = BUFFER_INCREMENT; // length of bgPid buffer; must be >0
 
