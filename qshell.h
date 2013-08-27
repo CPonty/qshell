@@ -66,12 +66,12 @@ int bgPidBufsize = BUFFER_INCREMENT; // length of bgPid buffer; must be >0
 /* top level */
 int main (int argc, char * argv[]);
 void parse_args (int argc, char * argv[]);
-void init ();
-void stop ();
+void init (void);
+void stop (void);
 
 /* input parsing */
 void input_load (char * fname);
-void input_read ();
+void input_read (void);
 void input_parse (int argc, char * argv[]);
 void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 	char * inFname, char * outFname, bool background);
@@ -81,16 +81,16 @@ void sig_do_int (int status);
 void sig_do_child (int status);
 void sig_do_shutdown (int status);
 void sig_do_pipe (int status);
-void sig_setup ();
-void sig_cancel ();
+void sig_setup (void);
+void sig_cancel (void);
 void sig_block (int signal);
-void sig_unblock (int signal);
+void sig_unblock (void);
 
 /* process handling */
 void proc_set_stream (char * fname, char * sname, char * mode, FILE * stream);
-void proc_reap (int waitPid);
+void proc_reap (void);
 void proc_do_reaped (int pid, int status);
-void proc_killall ();
+void proc_stop (int pid);
 void proc_background_add (int pid);
 
 /* */

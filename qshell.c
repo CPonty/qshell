@@ -17,25 +17,37 @@ int main (int argc, char * argv[]) {
 	return 0;
 }
 
-void init () {
+void init (void) {
 	/*
 	 * Setup: signal handling, memory allocation
 	 */
 	input = stdin;
 	sig_setup();
 	bgPids = (int *)malloc(sizeof(int)*bgPidBufsize);
+	memset(bgPids, -1, sizeof(int)*bgPidBufsize);
 }
 
-void stop () {
+void stop (void) {
 	/*
 	 * About to close shell
 	 *  - stop background processes
-	 *  - free memory
+	 *  - free memory, close files
 	 *  - exit with status 0 (OK)
 	 */
-	proc_reap(-1);
-	proc_killall();
+	int status;
+
+	proc_reap();
+	for (int i=0; i<2; i++) {
+		if (fgPid[i]!=-1) {
+			proc_stop(fgPid[i]);
+			waitpid(fgPid[i], &status, 0);
+			fgPid[i]=-1; 
+		}
+	}
+
 	free(bgPids);
+	if (input!=stdin) fclose(input);
+
 	#if DEBUG>0
 	fprinterr("\nExiting, status 0\n");
 	#else
@@ -76,7 +88,7 @@ void input_load (char * fname) {
 	}
 }
 
-void input_read () {
+void input_read (void) {
 	/*
 	 * Main event loop to collect commands from input lines
 	 */
@@ -191,7 +203,7 @@ void input_read () {
 
 
 		/* 5. Print background process output/termination */
-		proc_reap(-1);
+		proc_reap();
 
 		/* 6. STOP before we prompt again - is it EoF?
 		 *     - For interactive mode, this is any zero-char read
@@ -379,8 +391,6 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 	if (arg2c) {
 		pipe(fdPipe);
 	}
-	// block child handling while exec'ing
-	sig_block(SIGCHLD);
 
 	// fork and execute command 1
 	if (!(pid1 = fork())) {
@@ -442,32 +452,26 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 		fgPid[0]=pid1;
 		fgPid[1]=pid2;
 		#if DEBUG>0
-		fprinterr("FG Process : %d\n", pid1);
-		if (arg2c) fprinterr("FG (Piped) Process : %d\n", pid2);
+		fprinterr("FG      [%d]\t%s\n", pid1, arg1v[0]);
+		if (arg2c) fprinterr("FG-Pipe [%d]\t%s\n", 
+			pid2, arg2v[0]);
 		#endif
 		waitpid(fgPid[0], &status, 0);
 		fgPid[0]=-1; 
-		proc_do_reaped(pid1, status);
 		if (arg2c) {
 			waitpid(fgPid[1], &status, 0);
 			fgPid[1]=-1; 
-			proc_do_reaped(pid2, status);
 		}
 	} else {
 		// 2. Background: ----------
 		proc_background_add(pid1);
-		#if DEBUG>0
-		fprinterr("BG Process : %d\n", pid1);
-		#endif
+		fprintout("BG      [%d]\tCommand : %s\n", pid1, arg1v[0]);
 	}
-
-	sig_unblock(SIGCHLD);
+	
 	#if DEBUG>0
 	fprinterr("\\exec\n");
 	#endif
-
 }
-
 
 
 /* ------------------------------------------------------------------------- */
@@ -478,9 +482,9 @@ void proc_set_stream (char * fname, char * sname, char * mode, FILE * stream) {
 	 * Replace stdin, stdout, stderr with files
 	 */
 	if (fname) {
-		#if DEBUG>0
-		fprinterr("%s file : %s\n", sname, fname);
-		#endif
+		//#if DEBUG>0
+		//fprinterr("%s file : %s\n", sname, fname);
+		//#endif
 		if (!freopen(fname, mode, stream)) {
 			fnerror("freopen");
 			exit(EXIT_FAILURE);
@@ -488,29 +492,61 @@ void proc_set_stream (char * fname, char * sname, char * mode, FILE * stream) {
 	}
 }
 
-void proc_reap (int waitPid) {
+void proc_reap (void) {
 	/*
-	 * Reap (clean up) child processes.
-	 * waitPid specifies a certain process to wait for, -1 for all
+	 * Reap (clean up) background processes.
 	 */
+	int i;
 	int pid, status;
-	int childExists=0;
-
 	
+	#if DEBUG>1
+	fprinterr("\nBackground PID table:\n");
+	#endif
+	// Scan bgPids for running processes
+	for (i=0; i<bgPidBufsize; i++) {
+		pid = bgPids[i];
+		if (pid!=-1) {
+			#if DEBUG>1
+			fprinterr("-- %d\n", pid);
+			#endif
+			// If nonblocking wait(reap) succeeds, go to the
+			//   reaper handler & clear the background PID
+			if (waitpid(pid, &status, WNOHANG)>0) {
+				proc_do_reaped(pid, status);
+				bgPids[i]=-1;
+			}
+		}
+	}
 }
 
 void proc_do_reaped(int pid, int status) {
 	/*
-	 * Handle a reaped process
+	 * Print info on a reaped process
 	 */
-	
+	if (WTERMSIG(status)) {
+		
+	} else {
+		
+	}
+	fprintout("BG-Done [%d]\tStatus : %d", pid, WEXITSTATUS(status));
+	if (WTERMSIG(status)) {
+		fprintout("\tSignalled : %d-%s", WTERMSIG(status),
+			strsignal(WTERMSIG(status)));
+	}
+	fprintout("\n");
 }
 
-void proc_killall () {
+void proc_stop (int pid) {
 	/*
-	 * Terminate all child processes (foreground/background) and reap
+	 * Terminate process with given pid.
+	 *   Ignore if PID<0
 	 */
-
+	if (pid>=0) {
+		kill(pid, SIGNAL_STOP);
+		#if DEBUG>0
+		fprinterr("Terminating process : %d\n", pid);
+		#endif
+	}
 }
 
 void proc_background_add (int pid) {
@@ -518,6 +554,34 @@ void proc_background_add (int pid) {
 	 * Add a PID to the background process buffer.
 	 *   grow buffer if needed
 	 */
+	int i;
+	int * newBgPids;
+
+	// Try to write to an existing empty slot.
+	//   PID<0 is considered empty
+	for (i=0; i<bgPidBufsize; i++) {
+		if (bgPids[i]==-1) {
+			bgPids[i]=pid;
+			break;
+		}
+	}	
+	// Expand memory if needed - copy to a new buffer, swap/free pointers
+	if (i==bgPidBufsize) {
+		bgPidBufsize+=BUFFER_INCREMENT;
+		newBgPids = (int *)malloc(sizeof(int)*bgPidBufsize);
+		memset(newBgPids, -1, sizeof(int)*bgPidBufsize);
+		memcpy(newBgPids, bgPids, 
+			sizeof(int)*(bgPidBufsize-BUFFER_INCREMENT)); 
+		free(bgPids);
+		bgPids=newBgPids;
+		// re-call function - loop again to place the pid
+		proc_background_add(pid);
+		return;
+	}
+
+	#if DEBUG>1
+	fprinterr("<bg-%d>\n", pid);
+	#endif
 }
 
 
@@ -535,13 +599,9 @@ void sig_do_int (int status) {
 	#endif
 	ctrlc=1;
 
-	// Kill currently running child (if any)
-	for (int i=0; i<2; i++)
-	if (fgPid[i]!=-1) {
-		kill(fgPid[i], SIGNAL_STOP);
-		#if DEBUG>0
-		fprinterr("Terminating fg process %d : %d\n", i+1, fgPid[i]);
-		#endif
+	// Kill currently foreground processes (if any)
+	for (int i=0; i<2; i++) {
+		proc_stop(fgPid[i]);
 	}
 }
 
@@ -574,7 +634,7 @@ void sig_do_pipe (int status) {
 	#endif
 }
 
-void sig_setup () {
+void sig_setup (void) {
         /*
          * Enable interrupts for signal handling
          */
@@ -595,7 +655,7 @@ void sig_setup () {
 	sigaction(SIGPIPE, &sa[3], &storedSigActions[3]);
 }
 
-void sig_cancel () {
+void sig_cancel (void) {
         /*
          * Restore signal handlers stored in storedSigActions
 	 * Used by child processes
@@ -615,7 +675,7 @@ void sig_block (int signal) {
 	sigprocmask(SIG_BLOCK, &sigList, NULL);
 }
 
-void sig_unblock (int signal) {
+void sig_unblock (void) {
         /*
          * Unblock handling for a signal type
          */
