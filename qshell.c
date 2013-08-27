@@ -19,10 +19,11 @@ int main (int argc, char * argv[]) {
 
 void init () {
 	/*
-	 * Setup: signal handling, initial values for global variables
+	 * Setup: signal handling, memory allocation
 	 */
 	input = stdin;
 	sig_setup();
+	bgPids = (int *)malloc(sizeof(int)*bgPidBufsize);
 }
 
 void stop () {
@@ -32,6 +33,9 @@ void stop () {
 	 *  - free memory
 	 *  - exit with status 0 (OK)
 	 */
+	proc_reap(-1);
+	proc_killall();
+	free(bgPids);
 	#if DEBUG>0
 	fprinterr("\nExiting, status 0\n");
 	#else
@@ -186,9 +190,8 @@ void input_read () {
 		}
 
 
-		/* 5. Print background process output/termination
-		 *
-		 */
+		/* 5. Print background process output/termination */
+		proc_reap(-1);
 
 		/* 6. STOP before we prompt again - is it EoF?
 		 *     - For interactive mode, this is any zero-char read
@@ -354,13 +357,13 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 	 */
 	int i;
 	int status;
+	int fdPipe[2]; //idx 0: read, 1: write
 	char *exec1v[21], *exec2v[21];
-	pid_t pid1, pid2;
+	pid_t pid1=-1, pid2=-1;
 
 	#if DEBUG>0
 	fprinterr("exec\n");
 	#endif
-
 	// allocate null-terminated argument vectors
 	for (i=0; i<arg1c+1; i++) {
 		exec1v[i] = arg1v[i];
@@ -372,43 +375,93 @@ void input_exec (int arg1c, char * arg1v[], int arg2c, char * arg2v[],
 		}
 		exec2v[i-1]=NULL;
 	}
-
-	// create pipe(s) (command1->command2 or parent<-background)
-
-	/* fork and execute command 1 */
+	// create pipe(s) (command1->command2)
+	if (arg2c) {
+		pipe(fdPipe);
+	}
+	// block child handling while exec'ing
 	sig_block(SIGCHLD);
+
+	// fork and execute command 1
 	if (!(pid1 = fork())) {
-		// CHILD
+		// CHILD 1
 		// 0. Cancel signal handlers from qshell
 		sig_cancel();
-		// 1. Setup input/output/err files (if applicable)
-		proc_set_stream(inFname, "stdin", "r", stdin);
-		proc_set_stream(outFname, "stdout", "w", stdout);
-		// 3. Setup pipe (if applicable)
-		// 4. Exec
-		if (!background) {
-			execvp(exec1v[0], &exec1v[0]);
-			fnerror("exec");
-			exit(EXIT_FAILURE);
+		// 1. Setup input/output files (if applicable)
+		//      background processes redirect std[in|out|err]
+		//      to /dev/null unless otherwise specified
+		if (background && inFname==NULL) {
+			proc_set_stream("/dev/null", "stdin", "r", stdin);
+		} else {
+			proc_set_stream(inFname, "stdin", "r", stdin);
 		}
+		if (background && outFname==NULL) {
+			proc_set_stream("/dev/null", "stdout", "w", stdout);
+		} else if (!arg2c) {
+			proc_set_stream(outFname, "stdout", "w", stdout);
+		}
+		if (background) {
+			proc_set_stream("/dev/null", "stderr", "w", stderr);
+		}
+		// 2. Redirect pipe write end (if applicable)
+		if (arg2c) {
+			dup2(fdPipe[1], fileno(stdout));
+			close(fdPipe[0]);
+		}
+		// 3. Exec. Error code will not run if exec succeeds
+		execvp(exec1v[0], &exec1v[0]);
+		fnerror("exec");
+		exit(EXIT_FAILURE);
+	}
+
+	// fork and execute any piped command
+	if (arg2c)
+	if (!(pid2 = fork())) {
+		// CHILD 2
+		// 0. Cancel signal handlers from qshell
+		sig_cancel();
+		// 1. Setup output file (if applicable)
+		proc_set_stream(outFname, "stdout", "w", stdout);
+		// 2. Redirect pipe read end
+		dup2(fdPipe[0], fileno(stdin));
+		close(fdPipe[1]);
+		// 3. Exec. Error code will not run if exec succeeds
+		execvp(exec2v[0], &exec2v[0]);
+		fnerror("exec");
+		exit(EXIT_FAILURE);
 	}
 
 	// PARENT
-	// 1. Foreground: store PID and wait
-	if (!background) {
-		fgPid=pid1;
-		#if DEBUG>0
-		fprinterr("FG Process : %d\n", fgPid);
-		#endif
-		waitpid(fgPid, &status, 0);
-		fgPid=-1; 
-		proc_do_reaped(pid1, status);
+	// 0. Close pipes
+	if (arg2c) {
+		close(fdPipe[0]);
+		close(fdPipe[1]);
 	}
-	// 2. Background: ----------
-	//
-	sig_unblock(SIGCHLD);
-	 
+	// 1. Foreground: store PID(s) and wait/reap 
+	if (!background) {
+		fgPid[0]=pid1;
+		fgPid[1]=pid2;
+		#if DEBUG>0
+		fprinterr("FG Process : %d\n", pid1);
+		if (arg2c) fprinterr("FG (Piped) Process : %d\n", pid2);
+		#endif
+		waitpid(fgPid[0], &status, 0);
+		fgPid[0]=-1; 
+		proc_do_reaped(pid1, status);
+		if (arg2c) {
+			waitpid(fgPid[1], &status, 0);
+			fgPid[1]=-1; 
+			proc_do_reaped(pid2, status);
+		}
+	} else {
+		// 2. Background: ----------
+		proc_background_add(pid1);
+		#if DEBUG>0
+		fprinterr("BG Process : %d\n", pid1);
+		#endif
+	}
 
+	sig_unblock(SIGCHLD);
 	#if DEBUG>0
 	fprinterr("\\exec\n");
 	#endif
@@ -435,22 +488,6 @@ void proc_set_stream (char * fname, char * sname, char * mode, FILE * stream) {
 	}
 }
 
-void proc_parent_forked (int fdc, int fdv[], int argc, char *argv[], int pid) {
-        /*  
-         * >
-         */
-     
-}
-
-
-
-void proc_child_forked (int fdc, int fdv[], int argc, char *argv[], int pid) {
-        /*  
-         * >
-         */
-     
-}
-
 void proc_reap (int waitPid) {
 	/*
 	 * Reap (clean up) child processes.
@@ -471,9 +508,16 @@ void proc_do_reaped(int pid, int status) {
 
 void proc_killall () {
 	/*
-	 *
+	 * Terminate all child processes (foreground/background) and reap
 	 */
 
+}
+
+void proc_background_add (int pid) {
+	/*
+	 * Add a PID to the background process buffer.
+	 *   grow buffer if needed
+	 */
 }
 
 
@@ -485,32 +529,40 @@ void sig_do_int (int status) {
 	 * Interrupt on SIGINT
 	 */
 	#if DEBUG>0
-	fprinterr("SIGINT\n");
+	fprinterr("SIGINT(%d)\n", status);
 	#else
 	fprintout("\n");
 	#endif
 	ctrlc=1;
 
 	// Kill currently running child (if any)
-	if (fgPid!=-1) {
-		//
-		//
-		//
+	for (int i=0; i<2; i++)
+	if (fgPid[i]!=-1) {
+		kill(fgPid[i], SIGNAL_STOP);
+		#if DEBUG>0
+		fprinterr("Terminating fg process %d : %d\n", i+1, fgPid[i]);
+		#endif
 	}
 }
 
 void sig_do_child (int status) {
         /*
-         * >
+         * Debug handler so we can see when children signal completion.
+	 * We do reaping elsewhere (input loop, just before prompt)
          */
-    
+	#if DEBUG>0
+	fprinterr("SIGCHLD(%d)\n", status);
+	#endif
 }
 
 void sig_do_shutdown (int status) {
         /*
-         * >
+         * Interrupt on SIGTERM - gracefully shutdown
          */
-    
+	#if DEBUG>0
+	fprinterr("SIGTERM(%d)\n", status);
+	#endif
+	stop();
 }
 
 void sig_do_pipe (int status) {
@@ -518,7 +570,7 @@ void sig_do_pipe (int status) {
          * Debug handler in case we get sigpipe from stream writes/reads
          */
 	#if DEBUG>0
-	fprinterr("SIGPIPE\n");
+	fprinterr("SIGPIPE(%d)\n", status);
 	#endif
 }
 
@@ -532,11 +584,11 @@ void sig_setup () {
 	sa[0].sa_handler = sig_do_int;
 	sa[0].sa_flags = SA_RESTART;
 	sigaction(SIGINT, &sa[0], &storedSigActions[0]);
-	sa[0].sa_handler = sig_do_child;
-	sa[0].sa_flags = SA_RESTART;
+	sa[1].sa_handler = sig_do_child;
+	sa[1].sa_flags = SA_RESTART;
 	sigaction(SIGCHLD, &sa[1], &storedSigActions[1]);
-	sa[0].sa_handler = sig_do_shutdown;
-	sa[0].sa_flags = SA_RESTART;
+	sa[2].sa_handler = sig_do_shutdown;
+	sa[2].sa_flags = SA_RESTART;
 	sigaction(SIGTERM, &sa[2], &storedSigActions[2]);
 	sa[3].sa_handler = sig_do_pipe;
 	sa[3].sa_flags = SA_RESTART;
@@ -573,9 +625,3 @@ void sig_unblock (int signal) {
 
 /* ------------------------------------------------------------------------- */
 
-void sys_message (int msgCode) {
-	/*
-	 * Prepackaged messages/exit statuses corresponding to an ID
-	 */
-	
-}
